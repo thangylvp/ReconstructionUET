@@ -19,6 +19,7 @@
 #include <sstream>
 #include <cstdio>
 #include <sstream>	
+#include <cmath>
 #include <iostream>
 #include <chrono>
 #include <thread>
@@ -44,6 +45,15 @@ pcl::visualization::PCLVisualizer::Ptr simpleVis (pcl::PointCloud<pcl::PointXYZ>
 
 }
 
+pcl::PointXYZ normalization(pcl::PointXYZ p) {
+    pcl::PointXYZ ret;
+    float len = sqrt(p.x * p.x + p.y * p.y + p.z * p.z);
+    ret.x = p.x / len;
+    ret.y = p.y / len;
+    ret.z = p.z / len;
+    return ret;
+}
+
 int main(int argc, char** argv) {
     ros::init (argc, argv, "imuviz");
     ros::NodeHandle nh;
@@ -54,8 +64,20 @@ int main(int argc, char** argv) {
     viewer->setPointCloudRenderingProperties (pcl::visualization::PCL_VISUALIZER_POINT_SIZE, 1, "sample cloud");
     viewer->addCoordinateSystem (1.0);
     viewer->initCameraParameters ();
+    pcl::PointXYZ p1, p2;
+    p1.x = 0; p1.y = 0; p1.z = 0;
+    int cnt = 0;
     while (nh.ok()) {
+        p2.x = imuRaw.linear_acceleration.x;
+        p2.y = imuRaw.linear_acceleration.y;
+        p2.z = imuRaw.linear_acceleration.z;
+        p2 = normalization(p2);
+        std::string name = "line" + std::to_string(cnt);
+        cnt++;
+
         ROS_INFO("Imu accelerometer : x : %.3f y : %.3f z : %.3f", imuRaw.linear_acceleration.x, imuRaw.linear_acceleration.y, imuRaw.linear_acceleration.z);
+        viewer->addLine(p1, p2, 0.5, 0.5, 0.5, name);
+        viewer->setShapeRenderingProperties (pcl::visualization::PCL_VISUALIZER_LINE_WIDTH, 50, name);
         ros::spinOnce();
         viewer->spinOnce (1);
     }
