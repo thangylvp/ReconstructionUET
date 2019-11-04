@@ -25,6 +25,7 @@
 #include <thread>
 #include <iostream>
 
+#include <eigen3/Eigen/Eigen>
 
 // pcl::PointCloud<pcl::PointXYZ>::Ptr cloudMsg (new pcl::PointCloud<pcl::PointXYZ>);
 sensor_msgs::Imu imuRaw;
@@ -54,6 +55,25 @@ pcl::PointXYZ normalization(pcl::PointXYZ p) {
     return ret;
 }
 
+Eigen::Matrix4f rotationMatFromX(float angX) {
+    Eigen::Matrix4f ret;
+    ret << 1,         0,          0, 0,
+           0, cos(angX), -sin(angX), 0,
+           0, sin(angX),  cos(angX), 0,
+           0,         0,          0, 1;
+
+    return ret;  
+}
+
+Eigen::Matrix4f rotationMatFromY(float angY) {
+    Eigen::Matrix4f ret;
+    ret <<  cos(angY), 0, sin(angY), 0,
+                    0, 1,         0, 0,
+           -sin(angY), 0, cos(angY), 0,
+                    0, 0,         0, 1;
+    return ret;  
+}
+
 int main(int argc, char** argv) {
     ros::init (argc, argv, "imuviz");
     ros::NodeHandle nh;
@@ -64,7 +84,7 @@ int main(int argc, char** argv) {
     viewer->setPointCloudRenderingProperties (pcl::visualization::PCL_VISUALIZER_POINT_SIZE, 1, "sample cloud");
     viewer->addCoordinateSystem (1.0);
     viewer->initCameraParameters ();
-    pcl::PointXYZ p1, p2;
+    pcl::PointXYZ p1, p2, p3;
     p1.x = 0; p1.y = 0; p1.z = 0;
     int cnt = 0;
     while (nh.ok()) {
@@ -72,10 +92,28 @@ int main(int argc, char** argv) {
         p2.y = imuRaw.linear_acceleration.y;
         p2.z = imuRaw.linear_acceleration.z;
         p2 = normalization(p2);
-        std::string name = "line" + std::to_string(cnt);
-        cnt++;
 
-        ROS_INFO("Imu accelerometer : x : %.3f y : %.3f z : %.3f", imuRaw.linear_acceleration.x, imuRaw.linear_acceleration.y, imuRaw.linear_acceleration.z);
+        float angX = atan2(p2.y, p2.z);
+        float angY = -atan2(p2.x, sqrt(p2.y * p2.y + p2.z * p2.z));
+
+        Eigen::Matrix4f rotMatrix;
+        rotMatrix = rotationMatFromY(angY) * rotationMatFromX(angX);
+        Eigen::Vector4f tmp;
+        tmp << p2.x, p2.y, p2.z, 1;
+        std::cerr << rotMatrix << std::endl; 
+        tmp = rotMatrix * tmp;
+        tmp = tmp / tmp(3);
+        p3.x = tmp(0);
+        p3.y = tmp(1);
+        p3.z = tmp(2);
+        p3 = normalization(p3);
+        std::cerr << "xxxxxxxx : " << p3 << std::endl;
+        std::string name = "line" + std::to_string(cnt);
+
+        cnt++;
+        std::cerr << "Accel : " << p2.x << " " << p2.y <<  " " << p2.z << std::endl;
+
+        std::cerr << "-----------------------------------" << std::endl;
         viewer->addLine(p1, p2, 0.5, 0.5, 0.5, name);
         viewer->setShapeRenderingProperties (pcl::visualization::PCL_VISUALIZER_LINE_WIDTH, 50, name);
         ros::spinOnce();
